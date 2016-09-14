@@ -1,0 +1,15 @@
+{
+    "name": "detached",
+    "description": "Spawn detached process with no need to wait on them",
+    "license": "BSL-1.0",
+    "copyright": "Copyright © 2016, Roman Chistokhodov",
+    "authors": ["Roman Chistokhodov"],
+    "dependencies": {
+        "findexecutable": "~>0.1.0"
+    },
+    "targetName" : "detached",
+    "targetPath" : "lib", 
+    "targetType" : "library",
+    
+    "subPackages" : ["./examples/spawn"]
+}

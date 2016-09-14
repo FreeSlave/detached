@@ -1,0 +1,13 @@
+{
+    "name": "spawn",
+    "authors": ["Roman Chistokhodov"],
+    "description": "A minimal D application.",
+    "copyright": "Copyright © 2016, Roman Chistokhodov",
+    "license": "BSL-1.0",
+    "dependencies": {
+        "detached" : "*",
+        "findexecutable": "~>0.1.0"
+    },
+    "targetPath" : "bin",
+    "targetType" : "executable"
+}
