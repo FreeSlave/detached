@@ -424,6 +424,30 @@ void spawnProcessDetached(in char[][] args,
     }
 }
 
+version(Posix) unittest
+{
+    import std.file;
+    import std.string;
+    import std.path;
+    
+    import std.stdio;
+    
+    try {
+        auto devNull = File("/dev/null", "rwb");
+        ulong pid;
+        spawnProcessDetached(["pwd"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
+        assert(pid != 0);
+        
+        import std.exception;
+        assertThrown(spawnProcessDetached(["./test/nonexistent"]));
+        assertThrown(spawnProcessDetached(["./test/executable.sh"], devNull, devNull, devNull, null, Config.none, "./test/nonexistent"));
+        assertThrown(spawnProcessDetached(["./dub.json"]));
+        assertThrown(spawnProcessDetached(["./test/notreallyexecutable"]));
+    } catch(Exception e) {
+        
+    }
+}
+
 void spawnProcessDetached(in char[][] args, const string[string] env, Config config = Config.none, in char[] workingDirectory = null, ulong* pid = null)
 {
     spawnProcessDetached(args, std.stdio.stdin, std.stdio.stdout, std.stdio.stderr, env, config, workingDirectory, pid);
