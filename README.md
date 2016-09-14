@@ -11,7 +11,7 @@ which has almost the same API as [spawnProcess](http://dlang.org/phobos/std_proc
 ## Features
 
 * Run process detached, i.e. with no need to *wait*.
-* Actually reports errors from exec- functions unlike spawnProcess which just checks if executable and working directory exist before fork and hopes their states leave unchanged before exec.
+* Actually reports errors from exec- functions unlike *spawnProcess* which just checks if executable and working directory exist before fork and hopes their states leave unchanged before exec.
 
 ## Missing features
 
@@ -25,6 +25,7 @@ which has almost the same API as [spawnProcess](http://dlang.org/phobos/std_proc
 Simple program demonstrating the usage of spawnProcessDetached.
 
 ```
-dub run :spawn  -- --workdir=/usr/local pwd
-dub run :spawn  -- --stdout=/dev/null --stderr=/dev/null vlc
+dub run :spawn  -- --workdir=/usr/local -- pwd
+dub run :spawn  -- --stdout=/dev/null --stderr=/dev/null -- vlc
+dub run :spawn -- -v HELLO=WORLD -- sh -c 'echo $HELLO'
 ```

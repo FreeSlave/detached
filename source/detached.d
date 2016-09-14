@@ -1,20 +1,22 @@
 
 module detached;
 
-private {
+version(Posix) private {
     import core.sys.posix.unistd;
     import core.sys.posix.fcntl;
     import core.stdc.errno;
     
     static import std.stdio;
     import std.typecons : tuple, Tuple;
-    private import std.process : environ;
+    import std.process : environ;
+    
+    import findexecutable;
 }
 
 public import std.process : ProcessException, Config;
 public import std.stdio : File;
 
-private @nogc @trusted char* mallocToStringz(in char[] s) nothrow
+version(Posix) private @nogc @trusted char* mallocToStringz(in char[] s) nothrow
 {
     import core.stdc.string : strncpy;
     import core.stdc.stdlib : malloc;
@@ -26,17 +28,39 @@ private @nogc @trusted char* mallocToStringz(in char[] s) nothrow
     return sz;
 }
 
-private @nogc @trusted char** createExecArgv(in char[][] args) nothrow {
+version(Posix) unittest
+{
+    import core.stdc.stdlib : free;
+    import core.stdc.string : strcmp;
+    auto s = mallocToStringz("string");
+    assert(strcmp(s, "string") == 0);
+    free(s);
+    
+    assert(strcmp(mallocToStringz(null), "") == 0);
+}
+
+version(Posix) private @nogc @trusted char** createExecArgv(in char[][] args, in char[] filePath) nothrow {
     import core.stdc.stdlib : malloc;
     auto argv = cast(char**)malloc((args.length+1)*(char*).sizeof);
-    foreach(i, arg; args) {
-        argv[i] = mallocToStringz(arg);
+    argv[0] = mallocToStringz(filePath);
+    foreach(i; 1..args.length) {
+        argv[i] = mallocToStringz(args[i]);
     }
     argv[args.length] = null;
     return argv;
 }
 
-private @trusted void ignorePipeErrors() nothrow
+version(Posix) unittest
+{
+    import core.stdc.string : strcmp;
+    auto argv= createExecArgv(["program", "arg", "arg2"], "/absolute/path/program");
+    assert(strcmp(argv[0], "/absolute/path/program") == 0);
+    assert(strcmp(argv[1], "arg") == 0);
+    assert(strcmp(argv[2], "arg2") == 0);
+    assert(argv[3] is null);
+}
+
+version(Posix) private @trusted void ignorePipeErrors() nothrow
 {
     import core.sys.posix.signal;
     import core.stdc.string : memset;
@@ -48,7 +72,7 @@ private @trusted void ignorePipeErrors() nothrow
 }
 
 //from std.process
-private void setCLOEXEC(int fd, bool on) nothrow @nogc
+version(Posix) private void setCLOEXEC(int fd, bool on) nothrow @nogc
 {
     import core.sys.posix.fcntl : fcntl, F_GETFD, FD_CLOEXEC, F_SETFD;
     auto flags = fcntl(fd, F_GETFD);
@@ -62,8 +86,7 @@ private void setCLOEXEC(int fd, bool on) nothrow @nogc
 }
 
 //From std.process
-private const(char*)* createEnv(const string[string] childEnv,
-                                bool mergeWithParentEnv)
+version(Posix) private const(char*)* createEnv(const string[string] childEnv, bool mergeWithParentEnv)
 {
     // Determine the number of strings in the parent's environment.
     int parentEnvLength = 0;
@@ -93,6 +116,29 @@ private const(char*)* createEnv(const string[string] childEnv,
     return envz.ptr;
 }
 
+//From std.process
+version(Posix) @system unittest
+{
+    auto e1 = createEnv(null, false);
+    assert (e1 != null && *e1 == null);
+
+    auto e2 = createEnv(null, true);
+    assert (e2 != null);
+    int i = 0;
+    for (; environ[i] != null; ++i)
+    {
+        assert (e2[i] != null);
+        import core.stdc.string;
+        assert (strcmp(e2[i], environ[i]) == 0);
+    }
+    assert (e2[i] == null);
+
+    auto e3 = createEnv(["foo" : "bar", "hello" : "world"], false);
+    assert (e3 != null && e3[0] != null && e3[1] != null && e3[2] == null);
+    assert ((e3[0][0 .. 8] == "foo=bar\0" && e3[1][0 .. 12] == "hello=world\0")
+         || (e3[0][0 .. 12] == "hello=world\0" && e3[1][0 .. 8] == "foo=bar\0"));
+}
+
 private enum InternalError : ubyte
 {
     noerror,
@@ -103,13 +149,29 @@ private enum InternalError : ubyte
     environment
 }
 
-private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args, 
+version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args, 
                                                      ref File stdin, ref File stdout, ref File stderr, 
                                                      const string[string] env, 
                                                      Config config, 
                                                      in char[] workingDirectory, 
                                                      ulong* pid) nothrow
 {
+    import std.path : baseName;
+    import std.string : toStringz;
+    
+    string filePath = args[0].idup;
+    if (filePath.baseName == filePath) {
+        auto candidate = findExecutable(filePath);
+        if (!candidate.length) {
+            return tuple(ENOENT, "Could not find executable: " ~ filePath);
+        }
+        filePath = candidate;
+    }
+    
+    if (access(toStringz(filePath), X_OK) != 0) {
+        return tuple(.errno, "Not an executable file: " ~ filePath);
+    }
+    
     static @trusted @nogc int safePipe(ref int[2] pipefds) nothrow
     {
         int result = pipe(pipefds);
@@ -251,8 +313,8 @@ private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args,
             } catch(Exception e) {
                 abortOnError(execPipeOut, InternalError.environment, EINVAL);
             }
-            auto argv = createExecArgv(args);
-            execvp(argv[0], argv);
+            auto argv = createExecArgv(args, filePath);
+            execve(argv[0], argv, envz);
             abortOnError(execPipeOut, InternalError.exec, .errno);
         }
         
@@ -327,7 +389,7 @@ private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args,
     }
 }
 
-private string makeErrorMessage(string msg, int error) {
+version(Posix) private string makeErrorMessage(string msg, int error) {
     import core.stdc.string : strlen, strerror;
     import std.format : format;
     
