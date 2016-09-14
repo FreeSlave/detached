@@ -1,6 +1,6 @@
 # Detached
 
-Spawn detached process in D.
+Spawn detached processes in D.
 
 [![Build Status](https://travis-ci.org/MyLittleRobo/detached.svg?branch=master)](https://travis-ci.org/MyLittleRobo/detached) [![Coverage Status](https://coveralls.io/repos/github/MyLittleRobo/detached/badge.svg?branch=master)](https://coveralls.io/github/MyLittleRobo/detached?branch=master)
 

@@ -1,6 +1,6 @@
 {
     "name": "detached",
-    "description": "Spawn detached process with no need to wait on them",
+    "description": "Spawn detached processes with no need to wait on them",
     "license": "BSL-1.0",
     "copyright": "Copyright © 2016, Roman Chistokhodov",
     "authors": ["Roman Chistokhodov"],
