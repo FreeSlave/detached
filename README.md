@@ -17,7 +17,6 @@ which has almost the same API as [spawnProcess](http://dlang.org/phobos/std_proc
 
 ## Missing features
 
-* Windows support (will be later)
 * A way to close standard streams in spawned process (e.g. for daemon creation).
 
 ## Examples

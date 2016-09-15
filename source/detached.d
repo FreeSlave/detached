@@ -5,16 +5,20 @@ version(Posix) private {
     import core.sys.posix.unistd;
     import core.sys.posix.fcntl;
     import core.stdc.errno;
-    
-    static import std.stdio;
     import std.typecons : tuple, Tuple;
     import std.process : environ;
-    
-    import findexecutable;
 }
 
+version(Windows) private {
+    import core.sys.windows.windows;
+    import std.process : environment, escapeWindowsArgument;
+}
+
+import findexecutable;
+static import std.stdio;
+
 public import std.process : ProcessException, Config;
-public import std.stdio : File;
+public import std.stdio : File, StdioException;
 
 version(Posix) private @nogc @trusted char* mallocToStringz(in char[] s) nothrow
 {
@@ -58,6 +62,107 @@ version(Posix) unittest
     assert(strcmp(argv[1], "arg") == 0);
     assert(strcmp(argv[2], "arg2") == 0);
     assert(argv[3] is null);
+}
+
+private string escapeShellArguments(in char[][] args...) @trusted pure nothrow
+{
+    import std.exception : assumeUnique;
+    char[] buf;
+
+    @safe nothrow
+    char[] allocator(size_t size)
+    {
+        if (buf.length == 0)
+            return buf = new char[size];
+        else
+        {
+            auto p = buf.length;
+            buf.length = buf.length + 1 + size;
+            buf[p++] = ' ';
+            return buf[p..p+size];
+        }
+    }
+
+    foreach (arg; args)
+        escapeWindowsArgumentImpl!allocator(arg);
+    return assumeUnique(buf);
+}
+
+version(Windows) private char[] escapeWindowsArgumentImpl(alias allocator)(in char[] arg)
+    @safe nothrow
+    if (is(typeof(allocator(size_t.init)[0] = char.init)))
+{
+    // References:
+    // * http://msdn.microsoft.com/en-us/library/windows/desktop/bb776391(v=vs.85).aspx
+    // * http://blogs.msdn.com/b/oldnewthing/archive/2010/09/17/10063629.aspx
+
+    // Check if the string needs to be escaped,
+    // and calculate the total string size.
+
+    // Trailing backslashes must be escaped
+    bool escaping = true;
+    bool needEscape = false;
+    // Result size = input size + 2 for surrounding quotes + 1 for the
+    // backslash for each escaped character.
+    size_t size = 1 + arg.length + 1;
+
+    foreach_reverse (char c; arg)
+    {
+        if (c == '"')
+        {
+            needEscape = true;
+            escaping = true;
+            size++;
+        }
+        else
+        if (c == '\\')
+        {
+            if (escaping)
+                size++;
+        }
+        else
+        {
+            if (c == ' ' || c == '\t')
+                needEscape = true;
+            escaping = false;
+        }
+    }
+
+    import std.ascii : isDigit;
+    // Empty arguments need to be specified as ""
+    if (!arg.length)
+        needEscape = true;
+    else
+    // Arguments ending with digits need to be escaped,
+    // to disambiguate with 1>file redirection syntax
+    if (isDigit(arg[$-1]))
+        needEscape = true;
+
+    if (!needEscape)
+        return allocator(arg.length)[] = arg;
+
+    // Construct result string.
+
+    auto buf = allocator(size);
+    size_t p = size;
+    buf[--p] = '"';
+    escaping = true;
+    foreach_reverse (char c; arg)
+    {
+        if (c == '"')
+            escaping = true;
+        else
+        if (c != '\\')
+            escaping = false;
+
+        buf[--p] = c;
+        if (escaping)
+            buf[--p] = '\\';
+    }
+    buf[--p] = '"';
+    assert(p == 0);
+
+    return buf;
 }
 
 version(Posix) private @trusted void ignorePipeErrors() nothrow
@@ -137,6 +242,47 @@ version(Posix) @system unittest
     assert (e3 != null && e3[0] != null && e3[1] != null && e3[2] == null);
     assert ((e3[0][0 .. 8] == "foo=bar\0" && e3[1][0 .. 12] == "hello=world\0")
          || (e3[0][0 .. 12] == "hello=world\0" && e3[1][0 .. 8] == "foo=bar\0"));
+}
+
+version (Windows) private LPVOID createEnv(const string[string] childEnv, bool mergeWithParentEnv)
+{
+    if (mergeWithParentEnv && childEnv.length == 0) return null;
+    import std.array : appender;
+    import std.uni : toUpper;
+    auto envz = appender!(wchar[])();
+    void put(string var, string val)
+    {
+        envz.put(var);
+        envz.put('=');
+        envz.put(val);
+        envz.put(cast(wchar) '\0');
+    }
+
+    // Add the variables in childEnv, removing them from parentEnv
+    // if they exist there too.
+    auto parentEnv = mergeWithParentEnv ? environment.toAA() : null;
+    foreach (k, v; childEnv)
+    {
+        auto uk = toUpper(k);
+        put(uk, v);
+        if (uk in parentEnv) parentEnv.remove(uk);
+    }
+
+    // Add remaining parent environment variables.
+    foreach (k, v; parentEnv) put(k, v);
+
+    // Two final zeros are needed in case there aren't any environment vars,
+    // and the last one does no harm when there are.
+    envz.put("\0\0"w);
+    return envz.data.ptr;
+}
+
+version (Windows) @system unittest
+{
+    assert (createEnv(null, true) == null);
+    assert ((cast(wchar*) createEnv(null, false))[0 .. 2] == "\0\0"w);
+    auto e1 = (cast(wchar*) createEnv(["foo":"bar", "ab":"c"], false))[0 .. 14];
+    assert (e1 == "FOO=bar\0AB=c\0\0"w || e1 == "AB=c\0FOO=bar\0\0"w);
 }
 
 private enum InternalError : ubyte
@@ -389,6 +535,96 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     }
 }
 
+version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine, 
+                                                     ref File stdin, ref File stdout, ref File stderr, 
+                                                     const string[string] env, 
+                                                     Config config, 
+                                                     in char[] workingDirectory, 
+                                                     ulong* pid)
+{
+    import std.windows.syserror;
+    
+    // from std.process
+    // Prepare environment.
+    auto envz = createEnv(env, !(config & Config.newEnv));
+
+    // Startup info for CreateProcessW().
+    STARTUPINFO_W startinfo;
+    startinfo.cb = startinfo.sizeof;
+    static int getFD(ref File f) { return f.isOpen ? f.fileno : -1; }
+
+    // Extract file descriptors and HANDLEs from the streams and make the
+    // handles inheritable.
+    static void prepareStream(ref File file, DWORD stdHandle, string which,
+                              out int fileDescriptor, out HANDLE handle)
+    {
+        fileDescriptor = getFD(file);
+        handle = null;
+        if (fileDescriptor >= 0)
+            handle = file.windowsHandle;
+        // Windows GUI applications have a fd but not a valid Windows HANDLE.
+        if (handle is null || handle == INVALID_HANDLE_VALUE)
+            handle = GetStdHandle(stdHandle);
+
+        DWORD dwFlags;
+        if (GetHandleInformation(handle, &dwFlags))
+        {
+            if (!(dwFlags & HANDLE_FLAG_INHERIT))
+            {
+                if (!SetHandleInformation(handle,
+                                          HANDLE_FLAG_INHERIT,
+                                          HANDLE_FLAG_INHERIT))
+                {
+                    throw new StdioException(
+                        "Failed to make "~which~" stream inheritable by child process ("
+                        ~sysErrorString(GetLastError()) ~ ')',
+                        0);
+                }
+            }
+        }
+    }
+    int stdinFD = -1, stdoutFD = -1, stderrFD = -1;
+    prepareStream(stdin,  STD_INPUT_HANDLE,  "stdin" , stdinFD,  startinfo.hStdInput );
+    prepareStream(stdout, STD_OUTPUT_HANDLE, "stdout", stdoutFD, startinfo.hStdOutput);
+    prepareStream(stderr, STD_ERROR_HANDLE,  "stderr", stderrFD, startinfo.hStdError );
+
+    if ((startinfo.hStdInput  != null && startinfo.hStdInput  != INVALID_HANDLE_VALUE)
+     || (startinfo.hStdOutput != null && startinfo.hStdOutput != INVALID_HANDLE_VALUE)
+     || (startinfo.hStdError  != null && startinfo.hStdError  != INVALID_HANDLE_VALUE))
+        startinfo.dwFlags = STARTF_USESTDHANDLES;
+
+    // Create process.
+    PROCESS_INFORMATION pi;
+    DWORD dwCreationFlags =
+        CREATE_UNICODE_ENVIRONMENT |
+        ((config & Config.suppressConsole) ? CREATE_NO_WINDOW : 0);
+        
+        
+    import std.utf : toUTF16z, toUTF16;
+    auto pworkDir = workingDirectory.toUTF16z();
+    if (!CreateProcessW(null, (commandLine ~ "\0").toUTF16.dup.ptr, null, null, true, dwCreationFlags,
+                        envz, workingDirectory.length ? pworkDir : null, &startinfo, &pi))
+        throw ProcessException.newFromLastError("Failed to spawn new process");
+
+    enum STDERR_FILENO = 2;
+    // figure out if we should close any of the streams
+    if (!(config & Config.retainStdin ) && stdinFD  > STDERR_FILENO
+                                        && stdinFD  != getFD(std.stdio.stdin ))
+        stdin.close();
+    if (!(config & Config.retainStdout) && stdoutFD > STDERR_FILENO
+                                        && stdoutFD != getFD(std.stdio.stdout))
+        stdout.close();
+    if (!(config & Config.retainStderr) && stderrFD > STDERR_FILENO
+                                        && stderrFD != getFD(std.stdio.stderr))
+        stderr.close();
+
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    if (pid) {
+        *pid = pi.dwProcessId;
+    }
+}
+
 version(Posix) private string makeErrorMessage(string msg, int error) {
     import core.stdc.string : strlen, strerror;
     import std.format : format;
@@ -417,10 +653,17 @@ void spawnProcessDetached(in char[][] args,
                           ulong* pid = null)
 {
     import core.exception : RangeError;
-    if (args.length == 0) throw new RangeError();
-    auto result = spawnProcessDetachedImpl(args, stdin, stdout, stderr, env, config, workingDirectory, pid);
-    if (result[0] != 0) {
-        throw new ProcessException(makeErrorMessage(result[1], result[0]));
+    
+    version(Posix) {
+        if (args.length == 0) throw new RangeError();
+        auto result = spawnProcessDetachedImpl(args, stdin, stdout, stderr, env, config, workingDirectory, pid);
+        if (result[0] != 0) {
+            throw new ProcessException(makeErrorMessage(result[1], result[0]));
+        }
+    } else version(Windows) {
+        auto commandLine = escapeShellArguments(args);
+        if (commandLine.length == 0) throw new RangeError("Command line is empty");
+        spawnProcessDetachedImpl(commandLine, stdin, stdout, stderr, env, config, workingDirectory, pid);
     }
 }
 
