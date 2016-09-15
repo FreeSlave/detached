@@ -2,7 +2,9 @@
  * Spawn detached process.
  * Authors: 
  *  $(LINK2 https://github.com/MyLittleRobo, Roman Chistokhodov)
- * Some parts are merely copied from $(LINK2 https://github.com/dlang/phobos/blob/master/std/process.d, std.process)
+ *  
+ * 
+ *  Some parts are merely copied from $(LINK2 https://github.com/dlang/phobos/blob/master/std/process.d, std.process)
  * Copyright:
  *  Roman Chistokhodov, 2016
  * License: 
@@ -653,6 +655,9 @@ version(Posix) private string makeErrorMessage(string msg, int error) {
     return format("%s: %s", msg, errnoMsg[0..strlen(errnoMsg)]);
 }
 
+/**
+ * See $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
+ */
 void spawnProcessDetached(in char[][] args, 
                           File stdin = std.stdio.stdin, 
                           File stdout = std.stdio.stdout, 
@@ -677,27 +682,40 @@ void spawnProcessDetached(in char[][] args,
     }
 }
 
-version(Posix) unittest
+///
+unittest
 {
-    import std.file;
-    import std.string;
-    import std.path;
-    
-    import std.stdio;
-    
-    try {
-        auto devNull = File("/dev/null", "rwb");
-        ulong pid;
-        spawnProcessDetached(["pwd"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
-        assert(pid != 0);
+    import std.exception;
+    version(Posix) {
+        import std.file;
+        import std.string;
+        import std.path;
         
-        import std.exception;
-        assertThrown(spawnProcessDetached(["./test/nonexistent"]));
-        assertThrown(spawnProcessDetached(["./test/executable.sh"], devNull, devNull, devNull, null, Config.none, "./test/nonexistent"));
-        assertThrown(spawnProcessDetached(["./dub.json"]));
-        assertThrown(spawnProcessDetached(["./test/notreallyexecutable"]));
-    } catch(Exception e) {
+        import std.stdio;
         
+        try {
+            auto devNull = File("/dev/null", "rwb");
+            ulong pid;
+            spawnProcessDetached(["pwd"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
+            assert(pid != 0);
+            
+            assertThrown(spawnProcessDetached(["./test/nonexistent"]));
+            assertThrown(spawnProcessDetached(["./test/executable.sh"], devNull, devNull, devNull, null, Config.none, "./test/nonexistent"));
+            assertThrown(spawnProcessDetached(["./dub.json"]));
+            assertThrown(spawnProcessDetached(["./test/notreallyexecutable"]));
+        } catch(Exception e) {
+            
+        }
+    }
+    version(Windows) {
+        try {
+            ulong pid;
+            spawnProcessDetached(["whoami"], std.stdio.stdin, std.stdio.stdout, std.stdio.stderr, null, Config.none, "./test", &pid);
+            
+            assertThrown(spawnProcessDetached(["dub.json"]));
+        } catch(Exception e) {
+            
+        }
     }
 }
 
