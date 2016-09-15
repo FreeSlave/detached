@@ -1,3 +1,13 @@
+/**
+ * Spawn detached process.
+ * Authors: 
+ *  $(LINK2 https://github.com/MyLittleRobo, Roman Chistokhodov)
+ * Some parts are merely copied from $(LINK2 https://github.com/dlang/phobos/blob/master/std/process.d, std.process)
+ * Copyright:
+ *  Roman Chistokhodov, 2016
+ * License: 
+ *  $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+ */
 
 module detached;
 
