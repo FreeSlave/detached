@@ -637,26 +637,24 @@ version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine,
     }
 }
 
-version(Posix) private string makeErrorMessage(string msg, int error) {
-    import core.stdc.string : strlen, strerror;
-    import std.format : format;
-    
-    version (CRuntime_Glibc)
-    {
-        import core.stdc.string : strerror_r;
-        char[1024] buf;
-        auto errnoMsg = strerror_r(error, buf.ptr, buf.length);
-    }
-    else
-    {
-        import core.stdc.string : strerror;
-        auto errnoMsg = strerror(error);
-    }
-    return format("%s: %s", msg, errnoMsg[0..strlen(errnoMsg)]);
-}
-
 /**
- * See $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
+ * Spawns a new process, optionally assigning it an arbitrary set of standard input, output, and error streams.
+ * 
+ * The function returns immediately, leaving the spawned process to execute in parallel with its parent. 
+ * 
+ * The spawned process is detached from its parent, so you should not wait on the returned pid.
+ * 
+ * Params:
+ *  args = An array which contains the program name as the zeroth element and any command-line arguments in the following elements.
+ *  stdin = The standard input stream of the spawned process.
+ *  stdout = The standard output stream of the spawned process.
+ *  stderr = The standard error stream of the spawned process.
+ *  env = Additional environment variables for the child process.
+ *  config = Flags that control process creation. Same as for spawnProcess.
+ *  workingDirectory = The working directory for the new process.
+ *  pid = Pointer to variable that will get pid value in case spawnProcessDetached succeed. Not used if null.
+ * 
+ * See_Also: $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
  */
 void spawnProcessDetached(in char[][] args, 
                           File stdin = std.stdio.stdin, 
@@ -673,7 +671,8 @@ void spawnProcessDetached(in char[][] args,
         if (args.length == 0) throw new RangeError();
         auto result = spawnProcessDetachedImpl(args, stdin, stdout, stderr, env, config, workingDirectory, pid);
         if (result[0] != 0) {
-            throw new ProcessException(makeErrorMessage(result[1], result[0]));
+            .errno = result[0];
+            throw ProcessException.newFromErrno(result[1]);
         }
     } else version(Windows) {
         auto commandLine = escapeShellArguments(args);
@@ -685,18 +684,12 @@ void spawnProcessDetached(in char[][] args,
 ///
 unittest
 {
-    import std.exception;
+    import std.exception : assertThrown;
     version(Posix) {
-        import std.file;
-        import std.string;
-        import std.path;
-        
-        import std.stdio;
-        
         try {
             auto devNull = File("/dev/null", "rwb");
             ulong pid;
-            spawnProcessDetached(["pwd"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
+            spawnProcessDetached(["whoami"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
             assert(pid != 0);
             
             assertThrown(spawnProcessDetached(["./test/nonexistent"]));
@@ -719,6 +712,7 @@ unittest
     }
 }
 
+///ditto
 void spawnProcessDetached(in char[][] args, const string[string] env, Config config = Config.none, in char[] workingDirectory = null, ulong* pid = null)
 {
     spawnProcessDetached(args, std.stdio.stdin, std.stdio.stdout, std.stdio.stderr, env, config, workingDirectory, pid);
