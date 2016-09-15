@@ -76,7 +76,7 @@ version(Posix) unittest
     assert(argv[3] is null);
 }
 
-private string escapeShellArguments(in char[][] args...) @trusted pure nothrow
+version(Windows) private string escapeShellArguments(in char[][] args...) @trusted pure nothrow
 {
     import std.exception : assumeUnique;
     char[] buf;
