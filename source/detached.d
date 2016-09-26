@@ -1,7 +1,7 @@
 /**
  * Spawn detached process.
  * Authors: 
- *  $(LINK2 https://github.com/MyLittleRobo, Roman Chistokhodov)
+ *  $(LINK2 https://github.com/FreeSlave, Roman Chistokhodov)
  *  
  * 
  *  Some parts are merely copied from $(LINK2 https://github.com/dlang/phobos/blob/master/std/process.d, std.process)
