@@ -350,8 +350,9 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     }
     scope(exit) close(execPipe[0]);
     if (safePipe(pidPipe) != 0) {
+        auto pipeError = .errno;
         close(execPipe[1]);
-        return tuple(.errno, "Could not create pipe to get pid of child");
+        return tuple(pipeError, "Could not create pipe to get pid of child");
     }
     scope(exit) close(pidPipe[0]);
     
@@ -384,13 +385,14 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         close(pidPipe[0]);
         
         ignorePipeErrors();
-        setsid();
         
         int execPipeOut = execPipe[1];
         int pidPipeOut = pidPipe[1];
         
         pid_t secondFork = fork();
         if (secondFork == 0) {
+            setsid();
+            
             close(pidPipeOut);
             ignorePipeErrors();
         
@@ -475,12 +477,13 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
             execve(argv[0], argv, envz);
             abortOnError(execPipeOut, InternalError.exec, .errno);
         }
+        int forkErrno = .errno;
         
         write(pidPipeOut, &secondFork, pid_t.sizeof);
         close(pidPipeOut);
         
         if (secondFork == -1) {
-            abortOnError(execPipeOut, InternalError.doubleFork, .errno);
+            abortOnError(execPipeOut, InternalError.doubleFork, forkErrno);
         } else {
             close(execPipeOut);
             _exit(0);
