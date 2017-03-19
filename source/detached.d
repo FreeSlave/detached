@@ -432,9 +432,10 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
 
                 @nogc nothrow static bool pollClose(int maxToClose, int dontClose)
                 {
-                    import core.stdc.stdlib : alloca;
+                    import core.stdc.stdlib : malloc, free;
 
-                    pollfd* pfds = cast(pollfd*)alloca(pollfd.sizeof * maxToClose);
+                    pollfd* pfds = cast(pollfd*)malloc(pollfd.sizeof * maxToClose);
+                    scope(exit) free(pfds);
                     foreach (i; 0 .. maxToClose) {
                         pfds[i].fd = i + 3;
                         pfds[i].events = 0;
