@@ -177,17 +177,6 @@ version(Windows) private char[] escapeWindowsArgumentImpl(alias allocator)(in ch
     return buf;
 }
 
-version(Posix) private @trusted void ignorePipeErrors() nothrow
-{
-    import core.sys.posix.signal;
-    import core.stdc.string : memset;
-
-    sigaction_t ignoreAction;
-    memset(&ignoreAction, 0, sigaction_t.sizeof);
-    ignoreAction.sa_handler = SIG_IGN;
-    sigaction(SIGPIPE, &ignoreAction, null);
-}
-
 //from std.process
 version(Posix) private void setCLOEXEC(int fd, bool on) nothrow @nogc
 {
@@ -385,15 +374,12 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         close(execPipe[0]);
         close(pidPipe[0]);
         
-        ignorePipeErrors();
-        
         int execPipeOut = execPipe[1];
         int pidPipeOut = pidPipe[1];
         
         pid_t secondFork = fork();
         if (secondFork == 0) {
             close(pidPipeOut);
-            ignorePipeErrors();
         
             if (workingDirectory.length) {
                 import core.stdc.stdlib : free;
