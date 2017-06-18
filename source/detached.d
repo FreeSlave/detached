@@ -181,7 +181,7 @@ version(Posix) private @trusted void ignorePipeErrors() nothrow
 {
     import core.sys.posix.signal;
     import core.stdc.string : memset;
-    
+
     sigaction_t ignoreAction;
     memset(&ignoreAction, 0, sigaction_t.sizeof);
     ignoreAction.sa_handler = SIG_IGN;
@@ -381,6 +381,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     pid_t firstFork = fork();
     int lastError = .errno;
     if (firstFork == 0) {
+        setsid();
         close(execPipe[0]);
         close(pidPipe[0]);
         
@@ -391,8 +392,6 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         
         pid_t secondFork = fork();
         if (secondFork == 0) {
-            setsid();
-            
             close(pidPipeOut);
             ignorePipeErrors();
         
