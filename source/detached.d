@@ -370,7 +370,6 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     pid_t firstFork = fork();
     int lastError = .errno;
     if (firstFork == 0) {
-        setsid();
         close(execPipe[0]);
         close(pidPipe[0]);
         
