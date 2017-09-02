@@ -32,6 +32,37 @@ static import std.stdio;
 public import std.process : ProcessException, Config;
 public import std.stdio : File, StdioException;
 
+/**
+ * Spawns a new process, optionally assigning it an arbitrary set of standard input, output, and error streams.
+ * 
+ * The function returns immediately, leaving the spawned process to execute in parallel with its parent. 
+ * 
+ * The spawned process is detached from its parent, so you should not wait on the returned pid.
+ * 
+ * Params:
+ *  args = An array which contains the program name as the zeroth element and any command-line arguments in the following elements.
+ *  stdin = The standard input stream of the spawned process.
+ *  stdout = The standard output stream of the spawned process.
+ *  stderr = The standard error stream of the spawned process.
+ *  env = Additional environment variables for the child process.
+ *  config = Flags that control process creation. Same as for spawnProcess.
+ *  workingDirectory = The working directory for the new process.
+ *  pid = Pointer to variable that will get pid value in case spawnProcessDetached succeed. Not used if null.
+ * 
+ * See_Also: $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
+ */
+void spawnProcessDetached(in char[][] args, 
+                          File stdin = std.stdio.stdin, 
+                          File stdout = std.stdio.stdout, 
+                          File stderr = std.stdio.stderr, 
+                          const string[string] env = null, 
+                          Config config = Config.none, 
+                          in char[] workingDirectory = null, 
+                          ulong* pid = null);
+
+static if (!is(typeof({auto config = Config.detached;})))
+{
+
 version(Posix) private @nogc @trusted char* mallocToStringz(in char[] s) nothrow
 {
     import core.stdc.string : strncpy;
@@ -625,25 +656,6 @@ version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine,
     }
 }
 
-/**
- * Spawns a new process, optionally assigning it an arbitrary set of standard input, output, and error streams.
- * 
- * The function returns immediately, leaving the spawned process to execute in parallel with its parent. 
- * 
- * The spawned process is detached from its parent, so you should not wait on the returned pid.
- * 
- * Params:
- *  args = An array which contains the program name as the zeroth element and any command-line arguments in the following elements.
- *  stdin = The standard input stream of the spawned process.
- *  stdout = The standard output stream of the spawned process.
- *  stderr = The standard error stream of the spawned process.
- *  env = Additional environment variables for the child process.
- *  config = Flags that control process creation. Same as for spawnProcess.
- *  workingDirectory = The working directory for the new process.
- *  pid = Pointer to variable that will get pid value in case spawnProcessDetached succeed. Not used if null.
- * 
- * See_Also: $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
- */
 void spawnProcessDetached(in char[][] args, 
                           File stdin = std.stdio.stdin, 
                           File stdout = std.stdio.stdout, 
@@ -669,6 +681,25 @@ void spawnProcessDetached(in char[][] args,
     }
 }
 
+}
+else
+{
+    import std.process : spawnProcess;
+    void spawnProcessDetached(in char[][] args, 
+                          File stdin = std.stdio.stdin, 
+                          File stdout = std.stdio.stdout, 
+                          File stderr = std.stdio.stderr, 
+                          const string[string] env = null, 
+                          Config config = Config.none, 
+                          in char[] workingDirectory = null, 
+                          ulong* pid = null)
+    {
+        auto p = spawnProcess(args, stdin, stdout, stderr, env, config | Config.detached, workingDirectory);
+        if (pid) {
+            *pid = cast(typeof(*pid))p.processID;
+        }
+    }
+}
 ///
 unittest
 {
