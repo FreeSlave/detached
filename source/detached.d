@@ -18,7 +18,6 @@ version(Posix) private {
     import core.sys.posix.fcntl;
     import core.stdc.errno;
     import std.typecons : tuple, Tuple;
-    import std.process : environ;
 }
 
 version(Windows) private {
