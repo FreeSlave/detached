@@ -4,7 +4,7 @@ Spawn detached processes in D.
 
 **Note**: Phobos got this kind of functionality in version 2.076, so this library is no longer needed. Use [spawnProcess](http://dlang.org/phobos/std_process.html#.spawnProcess) with *Config.detached* flag instead. If *Config.detached* is available during the compilation this library fallbacks to the Phobos version.
 
-[![Build Status](https://travis-ci.org/FreeSlave/detached.svg?branch=master)](https://travis-ci.org/FreeSlave/detached) [![Windows Build Status](https://ci.appveyor.com/api/projects/status/github/FreeSlave/detached?branch=master&svg=true)](https://ci.appveyor.com/project/FreeSlave/detached) [![Coverage Status](https://coveralls.io/repos/github/FreeSlave/detached/badge.svg?branch=master)](https://coveralls.io/github/FreeSlave/detached?branch=master)
+[![Build Status](https://github.com/FreeSlave/detached/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/FreeSlave/detached/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/FreeSlave/detached/badge.svg?branch=master)](https://coveralls.io/github/FreeSlave/detached?branch=master)
 
 Before version 2.076 standard D library did not provide a way to start detached process and required to [wait](http://dlang.org/phobos/std_process.html#.wait) on a returned Pid. 
 Without waiting you would have got zombie processes (resource leakage) if parent process outlives its child.
