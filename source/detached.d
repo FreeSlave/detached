@@ -1,13 +1,13 @@
 /**
  * Spawn detached process.
- * Authors: 
+ * Authors:
  *  $(LINK2 https://github.com/FreeSlave, Roman Chistokhodov)
- *  
- * 
+ *
+ *
  *  Some parts are merely copied from $(LINK2 https://github.com/dlang/phobos/blob/master/std/process.d, std.process)
  * Copyright:
  *  Roman Chistokhodov, 2016
- * License: 
+ * License:
  *  $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
  */
 
@@ -33,11 +33,11 @@ public import std.stdio : File, StdioException;
 
 /**
  * Spawns a new process, optionally assigning it an arbitrary set of standard input, output, and error streams.
- * 
- * The function returns immediately, leaving the spawned process to execute in parallel with its parent. 
- * 
+ *
+ * The function returns immediately, leaving the spawned process to execute in parallel with its parent.
+ *
  * The spawned process is detached from its parent, so you should not wait on the returned pid.
- * 
+ *
  * Params:
  *  args = An array which contains the program name as the zeroth element and any command-line arguments in the following elements.
  *  stdin = The standard input stream of the spawned process.
@@ -47,16 +47,16 @@ public import std.stdio : File, StdioException;
  *  config = Flags that control process creation. Same as for spawnProcess.
  *  workingDirectory = The working directory for the new process.
  *  pid = Pointer to variable that will get pid value in case spawnProcessDetached succeed. Not used if null.
- * 
+ *
  * See_Also: $(LINK2 https://dlang.org/phobos/std_process.html#.spawnProcess, spawnProcess documentation)
  */
-void spawnProcessDetached(in char[][] args, 
-                          File stdin = std.stdio.stdin, 
-                          File stdout = std.stdio.stdout, 
-                          File stderr = std.stdio.stderr, 
-                          const string[string] env = null, 
-                          Config config = Config.none, 
-                          in char[] workingDirectory = null, 
+void spawnProcessDetached(in char[][] args,
+                          File stdin = std.stdio.stdin,
+                          File stdout = std.stdio.stdout,
+                          File stderr = std.stdio.stderr,
+                          const string[string] env = null,
+                          Config config = Config.none,
+                          in char[] workingDirectory = null,
                           ulong* pid = null);
 
 static if (!is(typeof({auto config = Config.detached;})))
@@ -81,7 +81,7 @@ version(Posix) unittest
     auto s = mallocToStringz("string");
     assert(strcmp(s, "string") == 0);
     free(s);
-    
+
     assert(strcmp(mallocToStringz(null), "") == 0);
 }
 
@@ -326,16 +326,16 @@ private enum InternalError : ubyte
     environment
 }
 
-version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args, 
-                                                     ref File stdin, ref File stdout, ref File stderr, 
-                                                     const string[string] env, 
-                                                     Config config, 
-                                                     in char[] workingDirectory, 
+version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] args,
+                                                     ref File stdin, ref File stdout, ref File stderr,
+                                                     const string[string] env,
+                                                     Config config,
+                                                     in char[] workingDirectory,
                                                      ulong* pid) nothrow
 {
     import std.path : baseName;
     import std.string : toStringz;
-    
+
     string filePath = args[0].idup;
     if (filePath.baseName == filePath) {
         auto candidate = findExecutable(filePath);
@@ -344,11 +344,11 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         }
         filePath = candidate;
     }
-    
+
     if (access(toStringz(filePath), X_OK) != 0) {
         return tuple(.errno, "Not an executable file: " ~ filePath);
     }
-    
+
     static @trusted @nogc int safePipe(ref int[2] pipefds) nothrow
     {
         int result = pipe(pipefds);
@@ -362,7 +362,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         }
         return result;
     }
-    
+
     int[2] execPipe, pidPipe;
     if (safePipe(execPipe) != 0) {
         return tuple(.errno, "Could not create pipe to check startup of child");
@@ -374,12 +374,12 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         return tuple(pipeError, "Could not create pipe to get pid of child");
     }
     scope(exit) close(pidPipe[0]);
-    
-    int getFD(ref File f) { 
+
+    int getFD(ref File f) {
         import core.stdc.stdio : fileno;
-        return fileno(f.getFP()); 
+        return fileno(f.getFP());
     }
-    
+
     int stdinFD, stdoutFD, stderrFD;
     try {
         stdinFD  = getFD(stdin);
@@ -388,7 +388,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     } catch(Exception e) {
         return tuple(.errno ? .errno : EBADF, "Could not get file descriptors of standard streams");
     }
-    
+
     static void abortOnError(int execPipeOut, InternalError errorType, int error) nothrow {
         error = error ? error : EINVAL;
         write(execPipeOut, &errorType, errorType.sizeof);
@@ -396,20 +396,20 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
         close(execPipeOut);
         _exit(1);
     }
-    
+
     pid_t firstFork = fork();
     int lastError = .errno;
     if (firstFork == 0) {
         close(execPipe[0]);
         close(pidPipe[0]);
-        
+
         int execPipeOut = execPipe[1];
         int pidPipeOut = pidPipe[1];
-        
+
         pid_t secondFork = fork();
         if (secondFork == 0) {
             close(pidPipeOut);
-        
+
             if (workingDirectory.length) {
                 import core.stdc.stdlib : free;
                 auto workDir = mallocToStringz(workingDirectory);
@@ -420,7 +420,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
                     free(workDir);
                 }
             }
-            
+
             // ===== From std.process =====
             if (stderrFD == STDOUT_FILENO) {
                 stderrFD = dup(stderrFD);
@@ -432,7 +432,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
             setCLOEXEC(STDIN_FILENO, false);
             setCLOEXEC(STDOUT_FILENO, false);
             setCLOEXEC(STDERR_FILENO, false);
-            
+
             if (!(config & Config.inheritFDs)) {
                 import core.sys.posix.poll : pollfd, poll, POLLNVAL;
                 import core.sys.posix.sys.resource : rlimit, getrlimit, RLIMIT_NOFILE;
@@ -481,7 +481,7 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
                 if (stderrFD > STDERR_FILENO)  close(stderrFD);
             }
             // =====================
-            
+
             const(char*)* envz;
             try {
                 envz = createEnv(env, !(config & Config.newEnv));
@@ -493,10 +493,10 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
             abortOnError(execPipeOut, InternalError.exec, .errno);
         }
         int forkErrno = .errno;
-        
+
         write(pidPipeOut, &secondFork, pid_t.sizeof);
         close(pidPipeOut);
-        
+
         if (secondFork == -1) {
             abortOnError(execPipeOut, InternalError.doubleFork, forkErrno);
         } else {
@@ -504,26 +504,26 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
             _exit(0);
         }
     }
-    
+
     close(execPipe[1]);
     close(pidPipe[1]);
-    
+
     if (firstFork == -1) {
         return tuple(lastError, "Could not fork");
     }
-    
+
     InternalError status;
     auto readExecResult = read(execPipe[0], &status, status.sizeof);
     lastError = .errno;
-    
+
     import core.sys.posix.sys.wait : waitpid;
     int waitResult;
     waitpid(firstFork, &waitResult, 0);
-    
+
     if (readExecResult == -1) {
         return tuple(lastError, "Could not read from pipe to get child status");
     }
-    
+
     try {
         if (!(config & Config.retainStdin ) && stdinFD  > STDERR_FILENO
                                         && stdinFD  != getFD(std.stdio.stdin ))
@@ -535,9 +535,9 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
                                             && stderrFD != getFD(std.stdio.stderr))
             stderr.close();
     } catch(Exception e) {
-        
+
     }
-    
+
     if (status == 0) {
         if (pid !is null) {
             pid_t actualPid = 0;
@@ -565,15 +565,15 @@ version(Posix) private Tuple!(int, string) spawnProcessDetachedImpl(in char[][] 
     }
 }
 
-version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine, 
-                                                     ref File stdin, ref File stdout, ref File stderr, 
-                                                     const string[string] env, 
-                                                     Config config, 
-                                                     in char[] workingDirectory, 
+version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine,
+                                                     ref File stdin, ref File stdout, ref File stderr,
+                                                     const string[string] env,
+                                                     Config config,
+                                                     in char[] workingDirectory,
                                                      ulong* pid)
 {
     import std.windows.syserror;
-    
+
     // from std.process
     // Prepare environment.
     auto envz = createEnv(env, !(config & Config.newEnv));
@@ -628,8 +628,8 @@ version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine,
     DWORD dwCreationFlags =
         CREATE_UNICODE_ENVIRONMENT |
         ((config & Config.suppressConsole) ? CREATE_NO_WINDOW : 0);
-        
-        
+
+
     import std.utf : toUTF16z, toUTF16;
     auto pworkDir = workingDirectory.toUTF16z();
     if (!CreateProcessW(null, (commandLine ~ "\0").toUTF16.dup.ptr, null, null, true, dwCreationFlags,
@@ -655,17 +655,17 @@ version(Windows) private void spawnProcessDetachedImpl(in char[] commandLine,
     }
 }
 
-void spawnProcessDetached(in char[][] args, 
-                          File stdin = std.stdio.stdin, 
-                          File stdout = std.stdio.stdout, 
-                          File stderr = std.stdio.stderr, 
-                          const string[string] env = null, 
-                          Config config = Config.none, 
-                          in char[] workingDirectory = null, 
+void spawnProcessDetached(in char[][] args,
+                          File stdin = std.stdio.stdin,
+                          File stdout = std.stdio.stdout,
+                          File stderr = std.stdio.stderr,
+                          const string[string] env = null,
+                          Config config = Config.none,
+                          in char[] workingDirectory = null,
                           ulong* pid = null)
 {
     import core.exception : RangeError;
-    
+
     version(Posix) {
         if (args.length == 0) throw new RangeError();
         auto result = spawnProcessDetachedImpl(args, stdin, stdout, stderr, env, config, workingDirectory, pid);
@@ -684,13 +684,13 @@ void spawnProcessDetached(in char[][] args,
 else
 {
     import std.process : spawnProcess;
-    void spawnProcessDetached(in char[][] args, 
-                          File stdin = std.stdio.stdin, 
-                          File stdout = std.stdio.stdout, 
-                          File stderr = std.stdio.stderr, 
-                          const string[string] env = null, 
-                          Config config = Config.none, 
-                          in char[] workingDirectory = null, 
+    void spawnProcessDetached(in char[][] args,
+                          File stdin = std.stdio.stdin,
+                          File stdout = std.stdio.stdout,
+                          File stderr = std.stdio.stderr,
+                          const string[string] env = null,
+                          Config config = Config.none,
+                          in char[] workingDirectory = null,
                           ulong* pid = null)
     {
         auto p = spawnProcess(args, stdin, stdout, stderr, env, config | Config.detached, workingDirectory);
@@ -709,23 +709,23 @@ unittest
             ulong pid;
             spawnProcessDetached(["whoami"], devNull, devNull, devNull, null, Config.none, "./test", &pid);
             assert(pid != 0);
-            
+
             assertThrown(spawnProcessDetached(["./test/nonexistent"]));
             assertThrown(spawnProcessDetached(["./test/executable.sh"], devNull, devNull, devNull, null, Config.none, "./test/nonexistent"));
             assertThrown(spawnProcessDetached(["./dub.json"]));
             assertThrown(spawnProcessDetached(["./test/notreallyexecutable"]));
         } catch(Exception e) {
-            
+
         }
     }
     version(Windows) {
         try {
             ulong pid;
             spawnProcessDetached(["whoami"], std.stdio.stdin, std.stdio.stdout, std.stdio.stderr, null, Config.none, "./test", &pid);
-            
+
             assertThrown(spawnProcessDetached(["dub.json"]));
         } catch(Exception e) {
-            
+
         }
     }
 }
